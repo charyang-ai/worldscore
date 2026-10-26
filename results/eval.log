@@ -1,0 +1,8 @@
+generation already finished
+-- Aspect (metric): motion_accuracy (motion_accuracy)
+-- Aspect (metric): motion_magnitude (optical_flow)
+-- Aspect (metric): motion_smoothness (motion_smoothness)
+Worldscore-Static: 51.1
+Worldscore-Dynamic: 43.9
+Scores: {'camera_control': 89.48, 'object_control': 25.0, 'content_alignment': 0, '3d_consistency': 82.54, 'photometric_consistency': 61.42, 'style_consistency': 61.3, 'subjective_quality': 37.96, 'motion_accuracy': 0.0, 'motion_magnitude': 24.41, 'motion_smoothness': 56.93}
+EVALUATE_OK

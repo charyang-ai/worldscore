@@ -1,0 +1,15 @@
+_gen/
+BLOG.md
+.env
+__pycache__/
+*.pyc
+*.egg-info/
+build/
+checkpoints/
+*.pth
+*.pt
+*.pkl
+*.safetensors
+*.so
+*.o
+.rocm-link/

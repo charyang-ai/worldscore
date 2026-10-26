@@ -1,0 +1,45 @@
+{
+    "camera_control": {
+        "camera_error": {
+            "score": [
+                0.5172108597834401,
+                0.0853585159767015
+            ],
+            "score_normalized": 0.8948120981074486
+        }
+    },
+    "object_control": {
+        "object_detection": {
+            "score": 0.25,
+            "score_normalized": 0.25
+        }
+    },
+    "3d_consistency": {
+        "reprojection_error": {
+            "score": 0.18718446791172028,
+            "score_normalized": 0.8253713332291069
+        }
+    },
+    "photometric_consistency": {
+        "optical_flow_aepe": {
+            "score": 0.4598689800082382,
+            "score_normalized": 0.614203875832015
+        }
+    },
+    "style_consistency": {
+        "gram_matrix": {
+            "score": 0.002708762651309371,
+            "score_normalized": 0.6130339069558042
+        }
+    },
+    "subjective_quality": {
+        "clip_iqa+": {
+            "score": 0.5408054292201996,
+            "score_normalized": 0.36475180556649567
+        },
+        "clip_aesthetic": {
+            "score": 5.206815481185913,
+            "score_normalized": 0.39441511009131724
+        }
+    }
+}

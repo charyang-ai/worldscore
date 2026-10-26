@@ -1,0 +1,24 @@
+{
+    "motion_accuracy": {
+        "motion_accuracy": {
+            "score": -8.7320723036925,
+            "score_normalized": 0.0
+        }
+    },
+    "motion_magnitude": {
+        "optical_flow": {
+            "score": 0.11363883145774405,
+            "score_normalized": 0.24405234909220017
+        }
+    },
+    "motion_smoothness": {
+        "motion_smoothness": {
+            "score": [
+                6.524960133744856,
+                0.9622651388247808,
+                0.016567820489096146
+            ],
+            "score_normalized": 0.5692940527963471
+        }
+    }
+}

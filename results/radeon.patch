@@ -1,0 +1,221 @@
+diff --git a/thirdparty/DROID-SLAM b/thirdparty/DROID-SLAM
+--- a/thirdparty/DROID-SLAM
++++ b/thirdparty/DROID-SLAM
+@@ -1 +1 @@
+-Subproject commit 8016d2b9b72b101a3e9ac804ebf20b4c654dc291
++Subproject commit 8016d2b9b72b101a3e9ac804ebf20b4c654dc291-dirty
+diff --git a/world_generators/configs/cogvideox_2b_t2v.yaml b/world_generators/configs/cogvideox_2b_t2v.yaml
+index 67f4b9d..7bcc534 100755
+--- a/world_generators/configs/cogvideox_2b_t2v.yaml
++++ b/world_generators/configs/cogvideox_2b_t2v.yaml
+@@ -1,4 +1,4 @@
+ _target_: world_generators.cogvideox.CogVideoX
+ model_name: cogvideox_2b_t2v
+-model_path: THUDM/CogVideoX-5b
++model_path: THUDM/CogVideoX-2b
+ generation_type: t2v
+\ No newline at end of file
+diff --git a/worldscore/benchmark/metrics/third_party/VFIMamba/model/feature_extractor.py b/worldscore/benchmark/metrics/third_party/VFIMamba/model/feature_extractor.py
+index ef4ef37..ed27eea 100755
+--- a/worldscore/benchmark/metrics/third_party/VFIMamba/model/feature_extractor.py
++++ b/worldscore/benchmark/metrics/third_party/VFIMamba/model/feature_extractor.py
+@@ -2,7 +2,13 @@ import torch
+ import torch.nn as nn
+ import math
+ from timm.models.layers import DropPath, to_2tuple, trunc_normal_
+-from mamba_ssm.ops.selective_scan_interface import selective_scan_fn, selective_scan_ref
++try:
++    from mamba_ssm.ops.selective_scan_interface import selective_scan_fn, selective_scan_ref
++except Exception:
++    from worldscore.benchmark.metrics.third_party.VFIMamba.selective_scan_pt import (
++        selective_scan_ref as selective_scan_fn,
++    )
++    selective_scan_ref = selective_scan_fn
+ from einops import rearrange, repeat
+ from typing import Optional, Callable
+ from functools import partial
+diff --git a/worldscore/benchmark/metrics/third_party/groundingdino/models/GroundingDINO/bertwarper.py b/worldscore/benchmark/metrics/third_party/groundingdino/models/GroundingDINO/bertwarper.py
+index f0cf977..f790d23 100755
+--- a/worldscore/benchmark/metrics/third_party/groundingdino/models/GroundingDINO/bertwarper.py
++++ b/worldscore/benchmark/metrics/third_party/groundingdino/models/GroundingDINO/bertwarper.py
+@@ -24,9 +24,30 @@ class BertModelWarper(nn.Module):
+         self.encoder = bert_model.encoder
+         self.pooler = bert_model.pooler
+ 
+-        self.get_extended_attention_mask = bert_model.get_extended_attention_mask
+-        self.invert_attention_mask = bert_model.invert_attention_mask
+-        self.get_head_mask = bert_model.get_head_mask
++        # transformers 5 dropped these PreTrainedModel helpers. BERT is not a
++        # decoder here, so the mask is the additive padding mask the encoder
++        # still adds to attention scores, and an absent head mask stays absent.
++        self.get_extended_attention_mask = self._extended_attention_mask
++        self.invert_attention_mask = self._extended_attention_mask
++        self.get_head_mask = self._head_mask
++
++
++    def _extended_attention_mask(self, attention_mask, input_shape=None, device=None, dtype=None):
++        if dtype is None:
++            dtype = torch.float32
++        if attention_mask.dim() == 3:
++            extended = attention_mask[:, None, :, :]
++        elif attention_mask.dim() == 2:
++            extended = attention_mask[:, None, None, :]
++        else:
++            raise ValueError(f"attention mask must be 2D or 3D, got {tuple(attention_mask.shape)}")
++        extended = extended.to(dtype=dtype)
++        return (1.0 - extended) * torch.finfo(dtype).min
++
++    def _head_mask(self, head_mask, num_hidden_layers, is_attention_chunked=False):
++        if head_mask is not None:
++            raise NotImplementedError("WorldScore does not pass an explicit BERT head mask")
++        return [None] * num_hidden_layers
+ 
+     def forward(
+         self,
+diff --git a/worldscore/benchmark/metrics/third_party/groundingdino/models/GroundingDINO/ms_deform_attn.py b/worldscore/benchmark/metrics/third_party/groundingdino/models/GroundingDINO/ms_deform_attn.py
+index 489d501..5cf2d4a 100755
+--- a/worldscore/benchmark/metrics/third_party/groundingdino/models/GroundingDINO/ms_deform_attn.py
++++ b/worldscore/benchmark/metrics/third_party/groundingdino/models/GroundingDINO/ms_deform_attn.py
+@@ -27,8 +27,9 @@ from torch.nn.init import constant_, xavier_uniform_
+ 
+ try:
+     from groundingdino import _C
+-except:
+-    warnings.warn("Failed to load custom C++ ops. Running on CPU mode Only!")
++except Exception:
++    _C = None
++    warnings.warn("Failed to load custom C++ ops. Using the PyTorch multi-scale deformable attention.")
+ 
+ 
+ # helpers
+@@ -327,7 +328,7 @@ class MultiScaleDeformableAttention(nn.Module):
+                 )
+             )
+     
+-        if torch.cuda.is_available() and value.is_cuda:
++        if torch.cuda.is_available() and value.is_cuda and _C is not None:
+             halffloat = False
+             if value.dtype == torch.float16:
+                 halffloat = True
+
+===== thirdparty/DROID-SLAM =====
+diff --git a/setup.py b/setup.py
+index 9af97d4..7fa4a67 100644
+--- a/setup.py
++++ b/setup.py
+@@ -4,58 +4,24 @@ from torch.utils.cpp_extension import BuildExtension, CUDAExtension
+ import os.path as osp
+ ROOT = osp.dirname(osp.abspath(__file__))
+ 
++# Lietorch is built from thirdparty/lietorch. A second setup() call in this
++# file makes current setuptools emit two egg-info directories and abort.
++# nvcc -gencode flags are CUDA-only; hipcc takes PYTORCH_ROCM_ARCH instead.
+ setup(
+     name='droid_backends',
+     ext_modules=[
+         CUDAExtension('droid_backends',
+-            include_dirs=[osp.join(ROOT, 'thirdparty/eigen')],
++            include_dirs=[osp.join(ROOT, 'thirdparty/lietorch/eigen')],
+             sources=[
+-                'src/droid.cpp', 
++                'src/droid.cpp',
+                 'src/droid_kernels.cu',
+                 'src/correlation_kernels.cu',
+                 'src/altcorr_kernel.cu',
+             ],
+             extra_compile_args={
+                 'cxx': ['-O3'],
+-                'nvcc': ['-O3',
+-                    '-gencode=arch=compute_60,code=sm_60',
+-                    '-gencode=arch=compute_61,code=sm_61',
+-                    '-gencode=arch=compute_70,code=sm_70',
+-                    '-gencode=arch=compute_75,code=sm_75',
+-                    '-gencode=arch=compute_80,code=sm_80',
+-                    '-gencode=arch=compute_86,code=sm_86',
+-                ]
++                'nvcc': ['-O3'],
+             }),
+     ],
+-    cmdclass={ 'build_ext' : BuildExtension }
+-)
+-
+-setup(
+-    name='lietorch',
+-    version='0.2',
+-    description='Lie Groups for PyTorch',
+-    packages=['lietorch'],
+-    package_dir={'': 'thirdparty/lietorch'},
+-    ext_modules=[
+-        CUDAExtension('lietorch_backends', 
+-            include_dirs=[
+-                osp.join(ROOT, 'thirdparty/lietorch/lietorch/include'), 
+-                osp.join(ROOT, 'thirdparty/eigen')],
+-            sources=[
+-                'thirdparty/lietorch/lietorch/src/lietorch.cpp', 
+-                'thirdparty/lietorch/lietorch/src/lietorch_gpu.cu',
+-                'thirdparty/lietorch/lietorch/src/lietorch_cpu.cpp'],
+-            extra_compile_args={
+-                'cxx': ['-O2'], 
+-                'nvcc': ['-O2',
+-                    '-gencode=arch=compute_60,code=sm_60', 
+-                    '-gencode=arch=compute_61,code=sm_61', 
+-                    '-gencode=arch=compute_70,code=sm_70', 
+-                    '-gencode=arch=compute_75,code=sm_75',
+-                    '-gencode=arch=compute_80,code=sm_80',
+-                    '-gencode=arch=compute_86,code=sm_86',                 
+-                ]
+-            }),
+-    ],
+-    cmdclass={ 'build_ext' : BuildExtension }
++    cmdclass={'build_ext': BuildExtension}
+ )
+diff --git a/src/altcorr_kernel.cu b/src/altcorr_kernel.cu
+index f418f5c..b53be29 100644
+--- a/src/altcorr_kernel.cu
++++ b/src/altcorr_kernel.cu
+@@ -306,7 +306,7 @@ std::vector<torch::Tensor> altcorr_cuda_forward(
+   const dim3 threads(BLOCK_H, BLOCK_W);
+ 
+ 
+-  AT_DISPATCH_FLOATING_TYPES_AND_HALF(fmap1.type(), "altcorr_forward_kernel", ([&] {
++  AT_DISPATCH_FLOATING_TYPES_AND_HALF(fmap1.scalar_type(), "altcorr_forward_kernel", ([&] {
+     altcorr_forward_kernel<scalar_t><<<blocks, threads>>>(
+         fmap1.packed_accessor32<scalar_t,4,torch::RestrictPtrTraits>(),
+         fmap2.packed_accessor32<scalar_t,4,torch::RestrictPtrTraits>(),
+diff --git a/src/correlation_kernels.cu b/src/correlation_kernels.cu
+index 2812067..df5735c 100644
+--- a/src/correlation_kernels.cu
++++ b/src/correlation_kernels.cu
+@@ -142,7 +142,7 @@ std::vector<torch::Tensor> corr_index_cuda_forward(
+   torch::Tensor corr = torch::zeros(
+     {batch_size, 2*radius+1, 2*radius+1, ht, wd}, opts);
+ 
+-  AT_DISPATCH_FLOATING_TYPES_AND_HALF(volume.type(), "sampler_forward_kernel", ([&] {
++  AT_DISPATCH_FLOATING_TYPES_AND_HALF(volume.scalar_type(), "sampler_forward_kernel", ([&] {
+     corr_index_forward_kernel<scalar_t><<<blocks, threads>>>(
+       volume.packed_accessor32<scalar_t,5,torch::RestrictPtrTraits>(),
+       coords.packed_accessor32<float,4,torch::RestrictPtrTraits>(),
+@@ -173,7 +173,7 @@ std::vector<torch::Tensor> corr_index_cuda_backward(
+   const dim3 threads(BLOCK, BLOCK);
+ 
+ 
+-  AT_DISPATCH_FLOATING_TYPES_AND_HALF(volume.type(), "sampler_backward_kernel", ([&] {
++  AT_DISPATCH_FLOATING_TYPES_AND_HALF(volume.scalar_type(), "sampler_backward_kernel", ([&] {
+     corr_index_backward_kernel<scalar_t><<<blocks, threads>>>(
+       coords.packed_accessor32<float,4,torch::RestrictPtrTraits>(),
+       corr_grad.packed_accessor32<scalar_t,5,torch::RestrictPtrTraits>(),
+
+===== lietorch =====
+diff --git a/lietorch/src/lietorch_gpu.cu b/lietorch/src/lietorch_gpu.cu
+index dff5c75..fe1e6b8 100644
+--- a/lietorch/src/lietorch_gpu.cu
++++ b/lietorch/src/lietorch_gpu.cu
+@@ -215,7 +215,7 @@ __global__ void act_backward_kernel(const scalar_t* grad, const scalar_t* X_ptr,
+         Point p(p_ptr + i*3);
+         PointGrad dq(grad + i*3);
+ 
+-        Eigen::Map<PointGrad>(dp + i*3) = dq * X.Matrix4x4().block<3,3>(0,0);
++        Eigen::Map<PointGrad>(dp + i*3) = dq * X.Matrix4x4().template block<3,3>(0,0);
+         Eigen::Map<Grad>(dX + i*Group::N) = dq * Group::act_jacobian(X*p);
+     }
+ }

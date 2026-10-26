@@ -1,0 +1,14 @@
+{
+    "camera_control": 89.48,
+    "object_control": 25.0,
+    "content_alignment": 0,
+    "3d_consistency": 82.54,
+    "photometric_consistency": 61.42,
+    "style_consistency": 61.3,
+    "subjective_quality": 37.96,
+    "motion_accuracy": 0.0,
+    "motion_magnitude": 24.41,
+    "motion_smoothness": 56.93,
+    "WorldScore-Static": 51.1,
+    "WorldScore-Dynamic": 43.9
+}

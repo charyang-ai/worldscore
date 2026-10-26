@@ -1,0 +1,6 @@
+ thirdparty/DROID-SLAM                              |  0
+ world_generators/configs/cogvideox_2b_t2v.yaml     |  2 +-
+ .../VFIMamba/model/feature_extractor.py            |  8 ++++++-
+ .../models/GroundingDINO/bertwarper.py             | 27 +++++++++++++++++++---
+ .../models/GroundingDINO/ms_deform_attn.py         |  7 +++---
+ 5 files changed, 36 insertions(+), 8 deletions(-)
